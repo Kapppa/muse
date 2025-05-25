@@ -21,10 +21,12 @@ import debug from '../utils/debug.js';
 import {getGuildSettings} from '../utils/get-guild-settings.js';
 import {buildPlayingMessageEmbed} from '../utils/build-embed.js';
 import {Setting} from '@prisma/client';
+import {Soundcloud} from 'soundcloud.ts';
 
 export enum MediaSource {
   Youtube,
   HLS,
+  SoundCloud
 }
 
 export interface QueuedPlaylist {
@@ -81,13 +83,15 @@ export default class {
 
   private positionInSeconds = 0;
   private readonly fileCache: FileCacheProvider;
+  private readonly soundcloud: Soundcloud;
   private disconnectTimer: NodeJS.Timeout | null = null;
 
   private readonly channelToSpeakingUsers: Map<string, Set<string>> = new Map();
 
-  constructor(fileCache: FileCacheProvider, guildId: string) {
+  constructor(fileCache: FileCacheProvider, guildId: string, soundcloud: Soundcloud) {
     this.fileCache = fileCache;
     this.guildId = guildId;
+    this.soundcloud = soundcloud;
   }
 
   async connect(channel: VoiceChannel): Promise<void> {
@@ -505,6 +509,12 @@ export default class {
       return this.createReadStream({url: song.url, cacheKey: song.url});
     }
 
+    if (song.source === MediaSource.SoundCloud) {
+      const stream = await this.soundcloud.util.streamTrack(song.url);
+      console.log(song.url)
+      return this.createReadStream({url: stream, cacheKey: song.url, cache: song.length < 30*60})
+    }
+
     let ffmpegInput: string | null;
     const ffmpegInputOptions: string[] = [];
     let shouldCacheVideo = false;
@@ -665,7 +675,7 @@ export default class {
     }
   }
 
-  private async createReadStream(options: {url: string; cacheKey: string; ffmpegInputOptions?: string[]; cache?: boolean; volumeAdjustment?: string}): Promise<Readable> {
+  private async createReadStream(options: {url: string | ReadableStream; cacheKey: string; ffmpegInputOptions?: string[]; cache?: boolean; volumeAdjustment?: string}): Promise<Readable> {
     return new Promise((resolve, reject) => {
       const capacitor = new WriteStream();
 
