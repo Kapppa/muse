@@ -96,8 +96,6 @@ export default class {
         throw err;
       }
 
-      console.log(err)
-
       // Not a URL, must search YouTube
       const songs = await this.youtubeVideoSearch(query, shouldSplitChapters);
 
